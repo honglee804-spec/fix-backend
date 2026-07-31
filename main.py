@@ -75,17 +75,37 @@ async def chat_with_ai(req: ChatRequest):
             vector=query_vector, top_k=15, include_metadata=True
         )
 
-        # 3) 이미 추천한 영상 제외 필터링
+        # 3) 이미 추천한 영상 제외 필터링 (제목 공백/소문자 처리 및 video_id 비교 강화)
+        seen_titles = [t.strip().lower() for t in req.recommended_titles]
+
         filtered_matches = []
         for match in search_results["matches"]:
-            title = match["metadata"].get("title", "제목 없음")
-            if title not in req.recommended_titles:
+            metadata = match.get("metadata", {})
+            title = metadata.get("title", "제목 없음").strip()
+            clean_title = title.lower()
+
+            url = metadata.get("url", "")
+            video_id = metadata.get("video_id", "") or metadata.get("url_id", "")
+
+            # 기존에 노출된 제목 또는 영상 ID와 중복되는지 검사
+            is_already_recommended = False
+            for seen in seen_titles:
+                if clean_title == seen or (video_id and video_id in seen):
+                    is_already_recommended = True
+                    break
+
+            if not is_already_recommended:
                 filtered_matches.append(match)
 
-        if not filtered_matches:
-            filtered_matches = search_results["matches"][:2]
-        else:
-            filtered_matches = filtered_matches[:2]
+        # 중복 제외 후 남은 영상이 부족할 경우 보충 로직
+        if len(filtered_matches) < 2:
+            for match in search_results["matches"]:
+                if match not in filtered_matches:
+                    filtered_matches.append(match)
+                if len(filtered_matches) >= 2:
+                    break
+
+        filtered_matches = filtered_matches[:2]
 
         context_text = ""
         recommended_videos = []
@@ -93,7 +113,7 @@ async def chat_with_ai(req: ChatRequest):
         # 4) 제목 및 유튜브 URL 추출
         for match in filtered_matches:
             metadata = match.get("metadata", {})
-            title = metadata.get("title", "제목 없음")
+            title = metadata.get("title", "제목 없음").strip()
             raw_text = metadata.get("raw_text", "")
             
             # 메타데이터에서 url 또는 video_id, url_id를 찾아 전체 주소 생성
@@ -101,7 +121,7 @@ async def chat_with_ai(req: ChatRequest):
             if not url and "video_id" in metadata:
                 url = f"https://www.youtube.com/watch?v={metadata['video_id']}"
             elif not url and "url_id" in metadata:
-                url = f"https://www.youtube.com"
+                url = "https://www.youtube.com"
 
             if not url:
                 url = "https://www.youtube.com"
