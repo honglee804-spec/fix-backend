@@ -19,6 +19,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# 추천 영상 단일 객체 모델 (제목 + 유튜브 링크)
+class RecommendedVideo(BaseModel):
+    title: str
+    url: str
+
 # 앱에서 전달받을 요청 데이터 구조 (JSON Request)
 class ChatRequest(BaseModel):
     user_question: str
@@ -29,7 +34,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     new_topic: str
-    recommended_titles: list[str]
+    recommended_videos: list[RecommendedVideo] # 제목과 URL을 함께 전달
 
 @app.get("/")
 def read_root():
@@ -83,16 +88,29 @@ async def chat_with_ai(req: ChatRequest):
             filtered_matches = filtered_matches[:2]
 
         context_text = ""
-        updated_recommended_titles = list(req.recommended_titles)
+        recommended_videos = []
 
+        # 4) 제목 및 유튜브 URL 추출
         for match in filtered_matches:
-            title = match["metadata"].get("title", "제목 없음")
-            raw_text = match["metadata"].get("raw_text", "")
-            context_text += f"\n[영상 제목: {title}]\n자막 내용: {raw_text}\n"
-            if title not in updated_recommended_titles:
-                updated_recommended_titles.append(title)
+            metadata = match.get("metadata", {})
+            title = metadata.get("title", "제목 없음")
+            raw_text = metadata.get("raw_text", "")
+            
+            # 메타데이터에서 url 또는 video_id, url_id를 찾아 전체 주소 생성
+            url = metadata.get("url", "")
+            if not url and "video_id" in metadata:
+                url = f"https://www.youtube.com/watch?v={metadata['video_id']}"
+            elif not url and "url_id" in metadata:
+                url = f"https://www.youtube.com/watch?v={metadata['url_id']}"
+            
+            # 주소를 찾지 못한 경우 기본 주소 연결
+            if not url:
+                url = "https://www.youtube.com"
 
-        # 4) Gemini 2.5 프롬프트 작성
+            context_text += f"\n[영상 제목: {title}]\n자막 내용: {raw_text}\n"
+            recommended_videos.append(RecommendedVideo(title=title, url=url))
+
+        # 5) Gemini 2.5 프롬프트 작성
         prompt = f"""
 너는 전문 체형 교정 및 운동 코치 AI야.
 현재 대화 주제는 '{current_last_topic}' 관련 내용이야.
@@ -110,7 +128,7 @@ async def chat_with_ai(req: ChatRequest):
 현재 사용자 입력: {user_question}
 """
 
-        # 5) Gemini 2.5 Flash 모델 호출
+        # 6) Gemini 2.5 Flash 모델 호출
         response = None
         for attempt in range(5):
             try:
@@ -128,7 +146,7 @@ async def chat_with_ai(req: ChatRequest):
         return ChatResponse(
             answer=response.text,
             new_topic=current_last_topic,
-            recommended_titles=updated_recommended_titles
+            recommended_videos=recommended_videos
         )
 
     except Exception as e:
