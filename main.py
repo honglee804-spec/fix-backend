@@ -101,29 +101,27 @@ async def chat_with_ai(req: ChatRequest):
             if not url and "video_id" in metadata:
                 url = f"https://www.youtube.com/watch?v={metadata['video_id']}"
             elif not url and "url_id" in metadata:
-                url = f"https://www.youtube.com/watch?v={metadata['url_id']}"
-            
-            # 주소를 찾지 못한 경우 기본 주소 연결
+                url = f"https://www.youtube.com"
+
             if not url:
                 url = "https://www.youtube.com"
 
             context_text += f"\n[영상 제목: {title}]\n자막 내용: {raw_text}\n"
             recommended_videos.append(RecommendedVideo(title=title, url=url))
 
-        # 5) Gemini 2.5 프롬프트 작성
+        # 5) Gemini 2.5 프롬프트 작성 (일반 대화 + 운동 안내 모두 유연하게 처리)
         prompt = f"""
-너는 전문 체형 교정 및 운동 코치 AI야.
-현재 대화 주제는 '{current_last_topic}' 관련 내용이야.
+너는 친절하고 전문적인 1:1 AI 코치이자 스마트한 대화 상대야.
 
-[검색된 쇼츠 영상 정보]
+[검색된 관련 영상 정보]
 {context_text}
 
 [답변 지침]
-1. 친절하고 전문적인 1:1 코치 어조로 말해 줘.
-2. 사용자가 다른 영상/다른 방법을 원했다면, 주제('{current_last_topic}')를 벗어나지 않으면서 새로 검색된 영상의 핵심 원리와 동작을 자신감 있게 가이드해 줘.
-3. "자막이 없다", "시스템 정보 부족" 같은 변명은 절대 하지 마.
-4. 새로 추천하는 영상의 제목을 명확하게 언급해 줘.
-5. 답변 끝에는 사용자가 동작을 이해했는지, 혹은 다음 질문이 있는지 편하게 물어봐 줘.
+1. 사용자가 체형 교정, 통증, 운동, 자세 관련 질문을 했을 때는 위 [검색된 관련 영상 정보]를 활용해 전문적인 핵심원리와 동작을 가이드하고 추천 영상 제목을 자연스럽게 언급해 줘.
+2. 사용자가 일상적인 대화, 일반적인 질문, 운동과 관련 없는 대화를 할 때는 억지로 운동이나 영상 이야기를 끌어들이지 말고, 질문 자체에 대해 친절하고 똑똑하게 답변해 줘.
+3. 검색된 영상 내용이 사용자 질문과 관련이 없다면 영상을 억지로 언급할 필요 없이 자유롭게 답변해도 좋아.
+4. "자막이 없다"거나 "정보가 부족하다" 같은 시스템 관련 변명은 절대 하지 마.
+5. 답변 끝에는 사용자가 잘 이해했는지, 혹은 더 궁금한 점이 있는지 가볍고 친근하게 물어봐 줘.
 
 현재 사용자 입력: {user_question}
 """
