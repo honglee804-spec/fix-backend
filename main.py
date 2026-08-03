@@ -1,6 +1,7 @@
 import os
 import time
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google import genai
 from pinecone import Pinecone
@@ -17,6 +18,15 @@ app = FastAPI(
     title="내몸교정 AI 코치 API",
     description="Gemini 2.5 + Pinecone 기반 체형 교정 코치 백엔드 API",
     version="1.0.0"
+)
+
+# CORS 설정 (모든 도메인 및 앱에서의 API 요청 허용)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 추천 영상 단일 객체 모델 (제목 + 유튜브 링크)
